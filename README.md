@@ -5,7 +5,7 @@ support_content 一个小加密，层级搜索就能搜索到参数。
 ![img1.png](md_imgs/img1.png)
 ![img2.png](md_imgs/img2.png)
 ![img3.png](md_imgs/img3.png)
-
+进度条多进程会有问题！！！
 ## 进度条：
 
     total_size = int(response.headers.get('content-length', 0))
