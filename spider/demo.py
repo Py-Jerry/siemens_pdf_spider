@@ -13,6 +13,8 @@ from tqdm import tqdm
 from loguru import logger
 import time
 import random
+from concurrent.futures import ThreadPoolExecutor
+
 
 class RequestsWrapper:
     def __init__(self, retries=3, backoff_factor=0.3, timeout=10, status_forcelist=(500, 502, 504)):
@@ -55,6 +57,7 @@ class RequestsWrapper:
         return self.request("DELETE", url, **kwargs)
 
 
+result_path = os.path.join(os.getcwd(), 'pdf_result')
 http = RequestsWrapper(retries=5, backoff_factor=1)
 
 
@@ -95,14 +98,47 @@ def support_content(ProductNodePath, Page):
     for support in support_contents:
         language_codes = [language['languageCode'] for language in support['languages']]
         entry_id = support['entryId']
+        # 获取到result_path下的文件夹名称
+        if str(entry_id) in os.listdir(result_path):
+            logger.debug(f"{entry_id},已采集,跳过这个")
+            continue
 
         if len(language_codes) <= 1 or 'zh' not in language_codes:  # 如果语言类型里面没有中文就或者只有一种或一种一下的语言就跳过
             continue
         else:
-            for language_code in language_codes:  # 循环获取不同语言的pdf下载地址
-                logger.info(f"正在下载:{support['title']},{language_code}的pdf文件")
-                get_pdf_link(locale_group_id=entry_id, language=language_code)
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                for language_code in language_codes:  # 循环获取不同语言的pdf下载地址
+                    logger.info(f"正在下载:{support['title']},{language_code}的pdf文件")
+                    executor.submit(get_pdf_link, locale_group_id=entry_id, language=language_code)
 
+
+# def down_pdf(url, headers, down_path):
+#     logger.info(f"🚀 正在开始下载：{url}")
+#
+#     # 发起带流的 GET 请求
+#     response = http.get(url, headers=headers, stream=True)
+#     if not response or response.status_code != 200:
+#         logger.error("❌ 下载失败")
+#         return
+#     # 获取总大小（字节）
+#     total_size = int(response.headers.get('content-length', 0))
+#     # 用 tqdm 包装写入过程，实现进度条
+#     with open(down_path, 'wb') as f, tqdm(
+#             desc=f"\033[92m📥 下载中: {down_path}\033[0m",  # 定义前置文本
+#             total=total_size,  # 比例后置数字
+#             unit='B',  # 这个应该是进度条大小
+#             unit_scale=True,  # 显示进度条
+#             unit_divisor=1024,  # 每次写入的字符大小
+#             ncols=200,  # desc+进度条的文本长度，超过了就不会显示进度条
+#             colour='white'  # 定义进度条颜色
+#     ) as bar:
+#
+#         for chunk in response.iter_content(chunk_size=1024):
+#             if chunk:
+#                 f.write(chunk)
+#                 bar.update(len(chunk))
+#
+#     logger.success(f"✅ 下载完成！存储位置：{down_path}")
 
 def down_pdf(url, headers, down_path):
     logger.info(f"🚀 正在开始下载：{url}")
@@ -114,23 +150,12 @@ def down_pdf(url, headers, down_path):
         return
     # 获取总大小（字节）
     total_size = int(response.headers.get('content-length', 0))
+
     # 用 tqdm 包装写入过程，实现进度条
-    with open(down_path, 'wb') as f, tqdm(
-            desc=f"\033[92m📥 下载中: {down_path}\033[0m",  # 定义前置文本
-            total=total_size,  # 比例后置数字
-            unit='B',  # 这个应该是进度条大小
-            unit_scale=True,  # 显示进度条
-            unit_divisor=1024,  # 每次写入的字符大小
-            ncols=200,  # desc+进度条的文本长度，超过了就不会显示进度条
-            colour='white'  # 定义进度条颜色
-    ) as bar:
+    with open(down_path, 'wb') as f:
+        f.write(response.content)
 
-        for chunk in response.iter_content(chunk_size=1024):
-            if chunk:
-                f.write(chunk)
-                bar.update(len(chunk))
-
-    logger.success(f"✅ 下载完成！存储位置：{down_path}")
+    logger.success(f"✅ 下载完成！总字节长度：{total_size}存储位置：{down_path}")
 
 
 def get_pdf_link(locale_group_id: int, language: str):
@@ -211,6 +236,6 @@ def main():
             time.sleep(random.uniform(1, 2))
 
 
-
 if __name__ == '__main__':
+    # 获取到result_path下的文件夹名称
     main()
